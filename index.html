@@ -396,12 +396,7 @@
         // Event listeners
         startBtn.addEventListener('click', startCamera);
         captureBtn.addEventListener('click', capturePhoto);
-        resetBtn.addEventListener('click', () => {
-            reset();
-            if (!stream) {
-                stopCamera();
-            }
-        });
+        resetBtn.addEventListener('click', reset);
         downloadBtn.addEventListener('click', downloadPhotostrip);
 
         // Clean up on page unload
