@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Booth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 20px 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 20px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .flash.active {
+            opacity: 0.8;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .photo-count {
+            font-size: 20px;
+            margin: 15px 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .preview-section {
+            margin-top: 30px;
+        }
+
+        .preview-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .thumbnails {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .thumbnail {
+            width: 150px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transform: scaleX(-1);
+        }
+
+        #photostrip {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            display: none;
+            margin: 0 auto;
+        }
+
+        .photostrip-container {
+            text-align: center;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            text-align: center;
+            padding: 15px;
+            background: #ffebee;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .instructions {
+            text-align: center;
+            color: #666;
+            margin: 15px 0;
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            button {
+                padding: 12px 30px;
+                font-size: 16px;
+            }
+
+            .thumbnail {
+                width: 100px;
+                height: 133px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>📸 Photo Booth</h1>
+    
+    <div class="container">
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="camera-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <div class="flash" id="flash"></div>
+        </div>
+
+        <div class="instructions">
+            Click "Start Camera" to begin, then take 3 photos!
+        </div>
+
+        <div class="controls">
+            <button id="startBtn">Start Camera</button>
+            <button id="captureBtn" disabled>Take Photo</button>
+            <button id="resetBtn" disabled>Start Over</button>
+        </div>
+
+        <div class="photo-count" id="photoCount">Photos taken: 0/3</div>
+
+        <div class="preview-section" id="previewSection" style="display: none;">
+            <h2>Your Photos</h2>
+            <div class="thumbnails" id="thumbnails"></div>
+        </div>
+
+        <div class="photostrip-container" id="photostripContainer" style="display: none;">
+            <h2>Your Photo Strip</h2>
+            <img id="photostrip" alt="Photo strip">
+            <div class="controls">
+                <button id="downloadBtn">Download Photo Strip</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const photoCount = document.getElementById('photoCount');
+        const thumbnails = document.getElementById('thumbnails');
+        const previewSection = document.getElementById('previewSection');
+        const photostripContainer = document.getElementById('photostripContainer');
+        const photostrip = document.getElementById('photostrip');
+        const flash = document.getElementById('flash');
+        const errorMessage = document.getElementById('errorMessage');
+
+        let photos = [];
+        let stream = null;
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        async function startCamera() {
+            try {
+                hideError();
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
+
+                startBtn.disabled = true;
+                captureBtn.disabled = false;
+                resetBtn.disabled = false;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                showError('Unable to access camera. Please make sure you have granted camera permissions and are using HTTPS.');
+            }
+        }
+
+        function capturePhoto() {
+            if (photos.length >= 3) return;
+
+            // Flash effect
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 200);
+
+            // Capture the photo
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            const photoData = canvas.toDataURL('image/jpeg', 0.9);
+            photos.push(photoData);
+
+            // Update UI
+            updatePhotoCount();
+            displayThumbnails();
+
+            if (photos.length === 3) {
+                captureBtn.disabled = true;
+                generatePhotostrip();
+            }
+        }
+
+        function updatePhotoCount() {
+            photoCount.textContent = `Photos taken: ${photos.length}/3`;
+        }
+
+        function displayThumbnails() {
+            thumbnails.innerHTML = '';
+            photos.forEach((photo, index) => {
+                const img = document.createElement('img');
+                img.src = photo;
+                img.className = 'thumbnail';
+                img.alt = `Photo ${index + 1}`;
+                thumbnails.appendChild(img);
+            });
+            previewSection.style.display = 'block';
+        }
+
+        function generatePhotostrip() {
+            const stripCanvas = document.createElement('canvas');
+            const stripCtx = stripCanvas.getContext('2d');
+            
+            // Standard photo strip dimensions (3 photos vertically)
+            const photoWidth = 400;
+            const photoHeight = 300;
+            const padding = 20;
+            const borderWidth = 40;
+            
+            stripCanvas.width = photoWidth + (borderWidth * 2);
+            stripCanvas.height = (photoHeight * 3) + (padding * 2) + (borderWidth * 2);
+
+            // White background/border
+            stripCtx.fillStyle = '#ffffff';
+            stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+
+            // Load and draw each photo
+            let loadedCount = 0;
+            photos.forEach((photoData, index) => {
+                const img = new Image();
+                img.onload = () => {
+                    const y = borderWidth + (index * (photoHeight + padding));
+                    stripCtx.drawImage(img, borderWidth, y, photoWidth, photoHeight);
+                    
+                    loadedCount++;
+                    if (loadedCount === 3) {
+                        // Add a subtle shadow/border to each photo
+                        stripCtx.strokeStyle = '#e0e0e0';
+                        stripCtx.lineWidth = 2;
+                        photos.forEach((_, i) => {
+                            const yPos = borderWidth + (i * (photoHeight + padding));
+                            stripCtx.strokeRect(borderWidth, yPos, photoWidth, photoHeight);
+                        });
+
+                        // Display the photostrip
+                        photostrip.src = stripCanvas.toDataURL('image/jpeg', 0.95);
+                        photostrip.style.display = 'block';
+                        photostripContainer.style.display = 'block';
+                    }
+                };
+                img.src = photoData;
+            });
+        }
+
+        function downloadPhotostrip() {
+            const link = document.createElement('a');
+            link.download = `photostrip-${Date.now()}.jpg`;
+            link.href = photostrip.src;
+            link.click();
+        }
+
+        function reset() {
+            photos = [];
+            thumbnails.innerHTML = '';
+            photostrip.style.display = 'none';
+            previewSection.style.display = 'none';
+            photostripContainer.style.display = 'none';
+            updatePhotoCount();
+            captureBtn.disabled = false;
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            startBtn.disabled = false;
+            captureBtn.disabled = true;
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startCamera);
+        captureBtn.addEventListener('click', capturePhoto);
+        resetBtn.addEventListener('click', () => {
+            reset();
+            if (!stream) {
+                stopCamera();
+            }
+        });
+        downloadBtn.addEventListener('click', downloadPhotostrip);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
+    </script>
+</body>
+</html>
